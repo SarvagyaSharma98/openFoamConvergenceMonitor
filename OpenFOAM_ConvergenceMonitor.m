@@ -4,8 +4,13 @@
 % This MATLAB app monitors an OpenFOAM solver log file (e.g., reactingFoam)
 % and plots user selected quantities
 %
+% ***IMP NOTE***
+% Developed for OpenFOAM v2412 log files that were generated during my trials of
+% reactingFoam simulations with GRI 3.0 mechanism. not tested for other types of 
+% simulations or log file formats.
+%
 % Features:
-%   - Simple GUI: Select log file, fields to monitor, # of steps, reset interval
+%   - Simple GUI: Select log file, fields to monitor, number of steps, reset interval
 %   - Supports any fields present in your log (e.g., Ux, Uy, h, OH, CO, CO2, O2)
 %   - Always plots max temperature and Courant numbers
 %   - Plots update in real time; the monitor auto-restarts to avoid memory leaks
