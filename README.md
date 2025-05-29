@@ -60,12 +60,6 @@ It is especially useful for OpenFOAM simulations where you redirect the output l
 
 ---
 
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
 ## Contributing
 
 Contributions, bug reports, and suggestions are welcome!  
