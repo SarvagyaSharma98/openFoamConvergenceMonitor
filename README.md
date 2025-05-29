@@ -75,12 +75,6 @@ mpirun -np 12 reactingFoam -parallel     > "/mnt/c/Users/<WindowsUser>/Desktop/l
 
 ---
 
-## Contributing
-
-Issues, feature requests and pull‑requests are welcome!
-
----
-
 ## Example Log Snippet
 
 ```text
