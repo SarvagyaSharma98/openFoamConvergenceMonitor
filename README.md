@@ -64,4 +64,4 @@ Troubleshooting
   - This script expects the default OpenFOAM logging format.
   - It may not work with steady-state solvers, or solvers with custom log messages.
 
-This script is shared to help the OpenFOAM community. Suggestions welcome.
+This script is shared to help the OpenFOAM community. Suggestions are welcomed.
