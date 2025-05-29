@@ -26,7 +26,7 @@ Quick Start
 Example Compatible Log Snippet
 --------------------------------------------
 
-Make sure your log file contains lines similar to the following:
+Make sure your log file contains lines similar to the following (switch to Code section for clearer view):
 
 Courant Number mean: 0.0177023 max: 0.123183
 Time = 0.002251
