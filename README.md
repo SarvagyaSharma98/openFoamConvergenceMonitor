@@ -1,4 +1,4 @@
-Real-Time OpenFOAM Residual Monitor (MATLAB)
+Real-Time OpenFOAM Residual Monitor (MATLAB) 
 --------------------------------------------
 
 This MATLAB script monitors an OpenFOAM log file in real time and plots residuals, Courant numbers, and max temperature. It is designed to work with transient, PIMPLE-based solvers like `reactingFoam`.
