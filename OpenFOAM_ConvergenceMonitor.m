@@ -1,80 +1,139 @@
 % =========================================================================
-% OpenFOAM Log File Real-Time Residual & Courant Number Monitor
+% OpenFOAM Convergence Real-Time Monitor App (with GUI)
 % -------------------------------------------------------------------------
-% Monitors a live OpenFOAM solver log (e.g., reactingFoam) and plots:
-%   - Initial and Final Residuals for specified fields
-%   - Maximum Temperature
-%   - Mean and Max Courant Numbers
+% This MATLAB app monitors an OpenFOAM solver log file (e.g., reactingFoam)
+% and plots user selected quantities
 %
-% Author: Sarvagya Sharma (https://github.com/SarvagyaSharma98)
-% Contributor: Sarvagya Sharma, IISc Blr.
+% Features:
+%   - Simple GUI: Select log file, fields to monitor, # of steps, reset interval
+%   - Supports any fields present in your log (e.g., Ux, Uy, h, OH, CO, CO2, O2)
+%   - Always plots max temperature and Courant numbers
+%   - Plots update in real time; the monitor auto-restarts to avoid memory leaks
 %
 % HOW TO USE:
-% 1. Set the 'logFile' variable below to your OpenFOAM log file path.
-%    - Supports Windows, Linux, or WSL-style paths.
-% 2. (Optional) Adjust 'fields' for the solver variables you want to track.
-% 3. Run this script in MATLAB (R2020b or newer recommended).
-% 4. Press Ctrl+C in MATLAB to stop the monitoring at any time.
+%   1. Run this script in MATLAB (R2020b or newer recommended).
+%   2. Fill in the GUI fields and select your OpenFOAM log file.
+%   3. Click "Start Monitoring" to launch the convergence plots.
+%   4. To stop, close the monitoring figure or use Ctrl+C in the MATLAB command window.
 %
 % REQUIREMENTS:
-%   - MATLAB R2020b or newer (for tiledlayout plotting)
-%   - OpenFOAM log file (e.g., reactingFoam, rhoReactingFoam)
+%   - MATLAB R2020b or newer (uses uifigure, tiledlayout)
+%   - OpenFOAM log file (from a parallel or serial run)
+%   - File read permissions for the log file
+%
+% AUTHOR:
+%   Sarvagya Sharma, IISc Bangalore
+%   Code refined and made interactive with assistance from OpenAI's ChatGPT
+%   Last updated: May 2025
 %
 % =========================================================================
 
-clear; clc;
+function openfoam_residual_monitor_app
+    % ------------------------- README END ------------------------------
 
-% ----------------------- User Configuration ------------------------------
-logFile = fullfile(pwd, 'log.reactingFoam'); % <-- Change this to your log file path
+    % Create Main App Window
+    appFig = uifigure('Name','OpenFOAM Log Monitor Setup','Position',[100 100 440 380]);
 
-PlotSteps = 500;           % Number of recent time steps to display in plot
-ResetInterval = 10;        % Main loop cycles before full reset (10*20s = 200s)
-fields = {'Ux', 'Uy', 'T', 'p', 'OH', 'CO', 'h'}; % Fields to monitor
+    % --- Log File Path Input ---
+    uilabel(appFig,'Position',[30 330 140 22],'Text','Log file path:');
+    logEdit = uieditfield(appFig,'text','Position',[30 305 260 24],'Value',fullfile(pwd,'log.reactingFoam'));
+    uibutton(appFig,'Position',[310 305 80 24],'Text','Browse...','ButtonPushedFcn',@(btn,evt)...
+        browseLogFile(appFig,logEdit));
 
-% ------------------ End of User Configuration ----------------------------
+    % --- Fields Input ---
+    uilabel(appFig,'Position',[30 265 320 22],'Text','Fields to monitor (comma-separated):');
+    fieldEdit = uieditfield(appFig,'text','Position',[30 240 350 24],'Value','Ux, Uy, T, p, OH, CO, h');
 
-numFields = numel(fields);
+    % --- Plot Steps Input ---
+    uilabel(appFig,'Position',[30 205 260 22],'Text','PlotSteps (# of time steps to plot):');
+    stepEdit = uieditfield(appFig,'numeric','Position',[240 205 60 24],'Value',500);
 
-disp('OpenFOAM Log Monitor: Press Ctrl+C in MATLAB to stop.');
+    % --- Reset Interval Input ---
+    uilabel(appFig,'Position',[30 170 250 22],'Text','ResetInterval (number of cycles):');
+    resetEdit = uieditfield(appFig,'numeric','Position',[240 170 60 24],'Value',50);
 
-while true % Reset outer loop
+    % --- Info Text ---
+    helpStr = ['After pressing Start, monitoring begins in a regular figure window.' newline ...
+        'You can close this app window to reclaim space.' newline ...
+        'Press Ctrl+C in MATLAB to stop the monitor at any time.'];
+    uitextarea(appFig,'Value',helpStr,'Position',[30 80 360 60],'Editable','off','FontSize',12);
 
-    [resData, courant, maxT, seenTimes, fig, cycleCount] = initializeData(fields);
+    % --- Start Monitoring Button (large and centered at bottom) ---
+    uibutton(appFig,'Position',[120 30 200 36],'Text','Start Monitoring','FontWeight','bold', ...
+        'FontSize',14,'ButtonPushedFcn', @(btn,evt)startMonitorCallback(...
+            appFig, logEdit, fieldEdit, stepEdit, resetEdit));
+end
 
-    while true % Main monitoring loop
-        cycleCount = cycleCount + 1;
-        logTxt = tryReadFile(logFile);
-        if isempty(logTxt), pause(5); continue; end
+%% ============ Button and UI Helper Functions ==============
 
-        % --- Extract all available time steps ---
-        [times, positions, tokens] = extractTimes(logTxt);
-        if isempty(times), disp('No time steps found. Waiting...'); pause(10); continue; end
+function browseLogFile(appFig,logEdit)
+    % Opens file browser and sets log file path in edit field
+    [f,p] = uigetfile({'*','All Files'},'Select OpenFOAM Log File');
+    if isequal(f,0), return; end
+    logEdit.Value = fullfile(p,f);
+end
 
-        % --- Process new time steps ---
-        [resData, courant, maxT, seenTimes] = ...
-            processTimeSteps(times, positions, tokens, logTxt, seenTimes, resData, fields, courant, maxT);
+function startMonitorCallback(appFig, logEdit, fieldEdit, stepEdit, resetEdit)
+    % Collects all UI inputs and launches the monitoring logic
+    logFile = logEdit.Value;
+    fieldStr = fieldEdit.Value;
+    fields = strtrim(strsplit(fieldStr,','));
+    PlotSteps = stepEdit.Value;
+    ResetInterval = resetEdit.Value;
+    close(appFig); % Close the app window after collecting inputs
 
-        % --- Select most recent times for plotting ---
-        lastTimes = selectRecentTimes(times, PlotSteps);
+    % Call the monitor function in the background with user settings
+    openfoam_residual_monitor_main(logFile, fields, PlotSteps, ResetInterval);
+end
 
-        % --- Plot results ---
-        fig = plotDiagnostics(fig, fields, resData, lastTimes, maxT, courant, tokens);
+%% ========== Core Monitoring and Plotting Logic ===============
 
-        % --- Pause and check for reset ---
-        drawnow;
-        pause(20);
-        if cycleCount >= ResetInterval
-            close(fig); clc;
-            disp('========== RESETTING MONITOR (timed restart) ==========');
-            break; % Restart everything to avoid memory leaks
+function openfoam_residual_monitor_main(logFile, fields, PlotSteps, ResetInterval)
+    % Main real-time monitor loop; runs until user stops or window closes
+    numFields = numel(fields);
+
+    disp('OpenFOAM Log Monitor: Press Ctrl+C in MATLAB to stop.');
+
+    while true % Outer loop for periodic reset (avoids memory leaks)
+        [resData, courant, maxT, seenTimes, fig, cycleCount] = initializeData(fields);
+
+        while true % Main monitoring loop
+            cycleCount = cycleCount + 1;
+
+            % --- Try to read log file (handles file busy/unavailable) ---
+            logTxt = tryReadFile(logFile);
+            if isempty(logTxt), pause(5); continue; end
+
+            % --- Extract all available time steps ---
+            [times, positions, tokens] = extractTimes(logTxt);
+            if isempty(times), disp('No time steps found. Waiting...'); pause(10); continue; end
+
+            % --- Process any new time steps for all tracked quantities ---
+            [resData, courant, maxT, seenTimes] = ...
+                processTimeSteps(times, positions, tokens, logTxt, seenTimes, resData, fields, courant, maxT);
+
+            % --- Select only the N most recent time steps for plotting ---
+            lastTimes = selectRecentTimes(times, PlotSteps);
+
+            % --- Plot results (all in a maximized figure window) ---
+            fig = plotDiagnostics(fig, fields, resData, lastTimes, maxT, courant, tokens);
+
+            % --- Pause and check for reset ---
+            drawnow;
+            pause(20); % 20s between updates (adjust as needed)
+            if cycleCount >= ResetInterval
+                close(fig); clc;
+                disp('========== RESETTING MONITOR (timed restart) ==========');
+                break; % Restart everything to avoid memory leaks
+            end
         end
     end
 end
 
-%% ====================== Helper Functions Below ========================
+%% ====================== Helper Functions ============================
 
 function [resData, courant, maxT, seenTimes, fig, cycleCount] = initializeData(fields)
-    % Initializes storage for field residuals, Courant numbers, etc.
+    % Initializes containers for field residuals, Courant numbers, etc.
     numFields = numel(fields);
     for k = 1:numFields
         resData.(fields{k}) = containers.Map('KeyType','double','ValueType','any');
@@ -88,14 +147,20 @@ function [resData, courant, maxT, seenTimes, fig, cycleCount] = initializeData(f
 end
 
 function logTxt = tryReadFile(logFile)
-    % Tries to read the log file, handling errors gracefully
+    % Attempts to read the log file, handles errors cleanly
     if ~isfile(logFile)
         disp(['Log file not found: ' logFile]);
         logTxt = '';
         return;
     end
     try
-        logTxt = fileread(logFile);
+        fid = fopen(logFile, 'rt');
+        if fid == -1
+            logTxt = '';
+            return;
+        end
+        logTxt = fread(fid, '*char')';
+        fclose(fid);
     catch ME
         disp(['Error reading file: ' ME.message]);
         logTxt = '';
@@ -103,7 +168,7 @@ function logTxt = tryReadFile(logFile)
 end
 
 function [times, positions, tokens] = extractTimes(logTxt)
-    % Finds all time steps in the log file
+    % Finds all "Time = <number>" in the log file
     timeExpr = 'Time = ([\d\.eE+-]+)';
     [tokens, positions] = regexp(logTxt, timeExpr, 'tokens', 'start');
     if isempty(tokens), times = []; return; end
@@ -112,6 +177,7 @@ end
 
 function [resData, courant, maxT, seenTimes] = ...
     processTimeSteps(times, positions, tokens, logTxt, seenTimes, resData, fields, courant, maxT)
+    % Processes each new time step and stores results for all requested fields
     numFields = numel(fields);
     for idx = 1:numel(times)
         t = times(idx);
@@ -124,7 +190,7 @@ function [resData, courant, maxT, seenTimes] = ...
         end
         stepTxt = logTxt(startIdx:endIdx);
 
-        % --- Field Residuals ---
+        % --- Field Residuals (Initial/Final) ---
         for f = 1:numFields
             field = fields{f};
             pat = [field, ', Initial residual = ([\d\.eE+-]+), Final residual = ([\d\.eE+-]+)'];
@@ -150,13 +216,13 @@ function [resData, courant, maxT, seenTimes] = ...
             maxT.val(t) = str2double(TmaxHit{1});
         end
 
-        % Mark as processed
+        % Mark this time as processed
         seenTimes(end+1) = t;
     end
 end
 
 function lastTimes = selectRecentTimes(times, PlotSteps)
-    % Selects the most recent N time steps for plotting
+    % Returns only the most recent PlotSteps number of time steps
     if numel(times) < PlotSteps
         lastTimes = times;
     else
@@ -165,17 +231,19 @@ function lastTimes = selectRecentTimes(times, PlotSteps)
 end
 
 function fig = plotDiagnostics(fig, fields, resData, lastTimes, maxT, courant, tokens)
-    % Plots all diagnostics in a single, clear figure
+    % Plots all diagnostics in a maximized, organized figure window
+
     numFields = numel(fields);
+
     if isempty(fig) || ~isvalid(fig)
         fig = figure('Name','OpenFOAM Convergence Monitor');
         set(fig, 'WindowState', 'maximized');
     end
-    figure(fig); clf;
+    clf(fig); % Clear figure content without bringing it to front
     set(fig, 'WindowState', 'maximized');
     tl = tiledlayout(2,5,"TileSpacing","compact","Padding","compact");
 
-    % --- Field Residuals ---
+    % --- Residual Plots for each selected field ---
     for f = 1:numFields
         nexttile(f)
         field = fields{f};
@@ -188,7 +256,7 @@ function fig = plotDiagnostics(fig, fields, resData, lastTimes, maxT, courant, t
                 iRes(n) = vals(1); fRes(n) = vals(2);
             end
         end
-        iRes(iRes==0) = 1e-16; fRes(fRes==0) = 1e-16; % Prevent log(0)
+        iRes(iRes==0) = 1e-16; fRes(fRes==0) = 1e-16; % Avoid log(0)
         semilogy(lastTimes, iRes, '-ob', lastTimes, fRes, '-sr', 'LineWidth',1.3,'MarkerSize',7);
         xlabel('Time'); ylabel('Residual');
         legend('Initial','Final','Location','best');
@@ -196,7 +264,7 @@ function fig = plotDiagnostics(fig, fields, resData, lastTimes, maxT, courant, t
         grid on; set(gca, 'FontSize', 11); axis tight;
     end
 
-    % --- Max Temperature ---
+    % --- Max Temperature Plot (always present, tile 8) ---
     nexttile(8);
     mt = nan(1,numel(lastTimes));
     for n = 1:numel(lastTimes)
@@ -208,7 +276,7 @@ function fig = plotDiagnostics(fig, fields, resData, lastTimes, maxT, courant, t
     title('Max Temperature');
     grid on; axis tight; set(gca, 'FontSize', 11);
 
-    % --- Courant mean ---
+    % --- Courant Mean Plot (always present, tile 9) ---
     nexttile(9);
     coMean = nan(1,numel(lastTimes));
     for n = 1:numel(lastTimes)
@@ -220,7 +288,7 @@ function fig = plotDiagnostics(fig, fields, resData, lastTimes, maxT, courant, t
     title('Mean Courant Number');
     grid on; axis tight; set(gca, 'FontSize', 11);
 
-    % --- Courant max ---
+    % --- Courant Max Plot (always present, tile 10) ---
     nexttile(10);
     coMax = nan(1,numel(lastTimes));
     for n = 1:numel(lastTimes)
