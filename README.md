@@ -1,67 +1,73 @@
-Real-Time OpenFOAM Residual Monitor (MATLAB) 
---------------------------------------------
+# OpenFOAM Real-Time Residual & Diagnostics Monitor (MATLAB)
 
-This MATLAB script monitors an OpenFOAM log file in real time and plots residuals, Courant numbers, and max temperature. It is designed to work with transient, PIMPLE-based solvers like `reactingFoam`.
+This MATLAB script provides **real-time monitoring and plotting** of residuals, Courant numbers, and maximum temperature from a live OpenFOAM solver log file.
 
---------------------------------------------
-Quick Start
---------------------------------------------
+It is especially useful for OpenFOAM simulations where you redirect the output log file to a location accessible from both your OpenFOAM environment (e.g., WSL or Linux) and MATLAB.
 
-1. Run your OpenFOAM case with this command:
+## Features
 
-   nohup mpirun --oversubscribe -np 12 reactingFoam -parallel > log.reactingFoam 2>&1 &
+- **Real-time Visualization:** Continuously plots residuals, Courant numbers, and max temperature.
+- **User-friendly Configuration:** Easily select fields to monitor, plot settings, and log file paths.
+- **Robust Error Handling:** Gracefully handles file read errors and missing data.
+- **Modular & Extensible:** Clearly structured code for easy customization and extension.
 
-2. Edit the `residualMonitor.m` script in MATLAB:
+---
 
-   - Set the full path to your OpenFOAM log file:
-     logFile = 'C:\\Path\\to\\log.reactingFoam';
+## Getting Started
 
-   - Set how many recent time steps to display:
-     PlotSteps = 250;
+### Prerequisites
 
-3. Run the script in MATLAB:
-   It will update every ~20 seconds. Use Ctrl+C to stop.
+- MATLAB R2020b or newer (for optimal plotting and tiled layouts).
+- An OpenFOAM simulation producing a log file.
 
---------------------------------------------
-Example Compatible Log Snippet
---------------------------------------------
+### Setup
 
-Make sure your log file contains lines similar to the following (switch to Code section for clearer view):
+1. **Download or clone** this repository.
+2. **Set the `logFile` variable** at the top of `OpenFOAM_ConvergenceMonitor.m` to the full path of your log file. For example:
 
-Courant Number mean: 0.0177023 max: 0.123183
-Time = 0.002251
+   ```matlab
+   logFile = "C:/path/to/your/log.reactingFoam";
+   ```
+   *(Use forward slashes `/` or double backslashes `\` for Windows paths.)*
 
-DILUPBiCGStab:  Solving for Ux, Initial residual = 0.00473474, Final residual = 1.98e-07, No Iterations 1
-DILUPBiCGStab:  Solving for Uy, Initial residual = 0.00468016, Final residual = 1.16e-07, No Iterations 1
-DILUPBiCGStab:  Solving for CH4, Initial residual = 3.62e-05, Final residual = 2.28e-07, No Iterations 1
-DILUPBiCGStab:  Solving for OH, Initial residual = 3.02e-05, Final residual = 6.05e-07, No Iterations 1
-DILUPBiCGStab:  Solving for CO, Initial residual = 8.30e-05, Final residual = 9.07e-07, No Iterations 1
-DILUPBiCGStab:  Solving for h, Initial residual = 2.41e-05, Final residual = 3.96e-07, No Iterations 1
-min/max(T) = 293, 2773.05
+3. **Optional:** Adjust the `fields` array in the script to match the variables you wish to monitor:
+   ```matlab
+   fields = {'Ux', 'Uy', 'T', 'p', 'OH', 'CO', 'h'};
+   ```
 
-The script extracts and plots:
-- Initial and final residuals for each field
-- Mean and maximum Courant numbers
-- Maximum temperature in the domain
+---
 
---------------------------------------------
-Requirements
---------------------------------------------
+## Running the Monitor
 
-- MATLAB R2020b or later (for `tiledlayout`)
-- OpenFOAM log file from a PIMPLE-based transient solver like reactingFoam
-- Standard field names: Ux, Uy, p, T, OH, CO, h (you can edit the `fields` array in the script if needed)
+1. **Start your OpenFOAM simulation** and redirect the log output to a file, e.g.:
+   ```bash
+   mpirun --oversubscribe -np 12 reactingFoam -parallel > "/path/to/your/log.reactingFoam" 2>&1
+   ```
 
---------------------------------------------
-Troubleshooting
---------------------------------------------
+2. **Run** the `OpenFOAM_ConvergenceMonitor.m` script in MATLAB.
 
-• If the script shows no data:
-  - Check that your log file path is correct.
-  - Make sure the file includes lines for Time, residuals, Courant number, and temperature.
+3. The script will automatically update the plots in real time.
 
-• If you use a different solver:
-  - This script expects the default OpenFOAM logging format.
-  - It may not work with steady-state solvers, or solvers with custom log messages.
+4. **To stop monitoring**, press `Ctrl+C` in the MATLAB command window.
 
-This script is shared to help the OpenFOAM community. Suggestions are welcomed.
+---
+
+## Recommended Workflow
+
+- Run your simulation in WSL, Linux, or any platform.
+- Redirect the OpenFOAM solver output to a log file accessible by MATLAB (e.g., in a shared folder).
+- Monitor solver convergence live from MATLAB for immediate feedback.
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## Contributing
+
+Contributions, bug reports, and suggestions are welcome!  
+Please open an issue or submit a pull request.
+
